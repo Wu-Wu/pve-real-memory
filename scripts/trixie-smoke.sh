@@ -22,7 +22,7 @@ sha256sum "$PM" | tee /root/pm.orig.sha
 printf '#!/bin/sh\necho "systemctl $*"\nexit 0\n' > /usr/local/bin/systemctl
 chmod +x /usr/local/bin/systemctl
 
-install -m 0755 /mount/bin/pve-real-memory /usr/local/bin/pve-real-memory
+install -m 0755 /mount/bin/pve-real-memory-linux-amd64 /usr/local/bin/pve-real-memory
 pve-real-memory version
 
 echo "=== install ==="

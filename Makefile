@@ -1,9 +1,12 @@
 # pve-real-memory — build entirely inside local docker; no Go toolchain on
-# the host. The release artifact is a static linux/amd64 binary.
+# the host. Release artifacts are static binaries for linux/amd64 AND
+# linux/arm64 (Proxmox 9.2+ officially supports both; pick by `uname -m`:
+# x86_64 -> amd64, aarch64 -> arm64).
 
 BINARY  := pve-real-memory
 HELPER  := proxmox-rmem-helper
 BUILDS  := $(BINARY) $(HELPER)
+ARCHS   := amd64 arm64
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -s -w -X main.version=$(VERSION)
 
@@ -31,10 +34,12 @@ image:
 build:
 	@mkdir -p bin
 	@for b in $(BUILDS); do \
-		$(RUN) env GOOS=linux GOARCH=amd64 go build -trimpath -ldflags '$(LDFLAGS)' \
-			-o /src/bin/$$b ./cmd/$$b || exit 1; \
+		for a in $(ARCHS); do \
+			$(RUN) env GOOS=linux GOARCH=$$a go build -trimpath -ldflags '$(LDFLAGS)' \
+				-o /src/bin/$$b-linux-$$a ./cmd/$$b || exit 1; \
+		done; \
 	done
-	@file bin/$(BINARY) bin/$(HELPER)
+	@file bin/*-linux-*
 
 ## build-local: native binary (for running inside an arm64 test VM)
 build-local:

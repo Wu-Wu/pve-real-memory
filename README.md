@@ -40,11 +40,14 @@ One static Go binary per Proxmox node plus one YAML config:
 
 ## Deploy
 
-Upload the binary (static, no dependencies, amd64) and go:
+Upload the static binary (no dependencies) for your architecture and go.
+Proxmox 9.2+ supports both amd64 and arm64; pick by `uname -m` —
+`x86_64` → amd64, `aarch64` → arm64:
 
 ```sh
-curl -LO https://github.com/Wu-Wu/pve-real-memory/releases/latest/download/pve-real-memory
-install -m 0755 pve-real-memory /usr/local/bin/
+uname -m                                  # x86_64 or aarch64
+curl -LO https://github.com/Wu-Wu/pve-real-memory/releases/latest/download/pve-real-memory-linux-amd64   # or -linux-arm64
+install -m 0755 pve-real-memory-linux-* /usr/local/bin/pve-real-memory
 /usr/local/bin/pve-real-memory --install
 ```
 
@@ -198,8 +201,9 @@ Everything runs in local docker, no host Go toolchain needed:
 ```sh
 make test    # go test ./... inside golang:1.26 (perl -c tests included)
 make vet
-make build   # static linux/amd64 binaries -> ./bin/pve-real-memory
-             #                              -> ./bin/proxmox-rmem-helper
+make build   # static linux/amd64 + linux/arm64 binaries:
+             #   bin/pve-real-memory-linux-{amd64,arm64}
+             #   bin/proxmox-rmem-helper-linux-{amd64,arm64}
 ```
 
 Tested against the `vmstatus()` source of Proxmox qemu-server 9.2 and
