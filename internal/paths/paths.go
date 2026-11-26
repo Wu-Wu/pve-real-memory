@@ -55,13 +55,13 @@ const (
 
 	// ---- legacy proxmox-rmem locations, removed by the migration ----
 
-	LegacyUnitFile      = "/etc/systemd/system/proxmox-rmem.service"
-	LegacyAptHookFile   = "/etc/apt/apt.conf.d/99-proxmox-rmem"
-	LegacyAptHelper     = "/usr/local/bin/proxmox-rmem-apt-hook.sh"
-	LegacyScript        = "/usr/local/bin/proxmox-rmem.py"
-	LegacyPatchScript   = "/usr/local/bin/proxmox-rmem-patch.py"
-	LegacyConfigDir     = "/etc/proxmox-rmem"
-	LegacyBackupPM      = QemuServerPM + ".bak"
-	LegacyOverrideGlob  = "/tmp/pve-vm-*-mem-override"
-	LegacyAutopatchLog  = "/var/log/proxmox-rmem-autopatch.log"
+	LegacyUnitFile     = "/etc/systemd/system/proxmox-rmem.service"
+	LegacyAptHookFile  = "/etc/apt/apt.conf.d/99-proxmox-rmem"
+	LegacyAptHelper    = "/usr/local/bin/proxmox-rmem-apt-hook.sh"
+	LegacyScript       = "/usr/local/bin/proxmox-rmem.py"
+	LegacyPatchScript  = "/usr/local/bin/proxmox-rmem-patch.py"
+	LegacyConfigDir    = "/etc/proxmox-rmem"
+	LegacyBackupPM     = QemuServerPM + ".bak"
+	LegacyOverrideGlob = "/tmp/pve-vm-*-mem-override"
+	LegacyAutopatchLog = "/var/log/proxmox-rmem-autopatch.log"
 )
