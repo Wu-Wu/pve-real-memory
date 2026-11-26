@@ -117,9 +117,13 @@ system extension is present**: `guest-get-osinfo` reports `ID=talos`,
 collection then goes to the [`meminfo-service`](https://github.com/Wu-Wu/meminfo-service)
 extension endpoint at `http://<agent-reported-IPv4>:1027/meminfo`
 (the IP is cached with the discovery entry; a `host:` on the source pins
-it explicitly). If the endpoint is down, the agent's `/proc/meminfo`
-view is used as fallback. Talos nodes without QGA are declared with
-`method: http` and `host:` (SSH is not usable there — no shell).
+it explicitly). The endpoint is the **only** Talos channel — the guest
+has no shell and the agent allows no `guest-exec`, which is exactly why
+the endpoint exists. When it is unreachable the daemon logs the error
+and writes nothing: the hook's TTL leaves the host view in place.
+`guest-get-network-interfaces` is best effort; deployments that block
+that RPC pin the address with `host:`. Nodes without the agent are
+declared with `method: http` (SSH is not usable there either).
 
 ### SSH host keys
 

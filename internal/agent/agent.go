@@ -322,11 +322,15 @@ func (a *Agent) fetch(s config.Source) (int64, error) {
 	return 0, fmt.Errorf("unknown method %q", s.Method)
 }
 
-// fetchTalos collects from a Talos guest: the meminfo-service endpoint
-// (the Talos system extension) is authoritative; the agent's view of
-// /proc/meminfo is the fallback for endpoint outages. The endpoint host
-// comes from the source, or — for auto-discovered guests — from the
-// agent's reported IPv4, cached with the discovery entry.
+// fetchTalos collects from a Talos guest through the meminfo-service
+// endpoint ONLY: Talos is immutable, has no userland shell, and its
+// qemu-guest-agent extension does not allow guest-exec — there is no
+// /proc/meminfo path via the agent, that is precisely why the endpoint
+// exists. The endpoint host comes from the source (host:/url:) or, for
+// auto-discovered guests, from the agent's reported IPv4 (best effort:
+// some deployments block that RPC too), cached with the discovery
+// entry. Any failure is returned as-is: no override is written, the
+// hook's TTL keeps the host view visible, and the error is logged.
 func (a *Agent) fetchTalos(s config.Source, vmid int) (int64, error) {
 	url := s.URL
 	if url == "" {
@@ -337,52 +341,28 @@ func (a *Agent) fetchTalos(s config.Source, vmid int) (int64, error) {
 			if host == "" {
 				ip, err := a.QGAIPv4(vmid)
 				if err != nil {
-					a.Log.Debug("talos: no endpoint host (agent gave no IPv4), falling back to /proc/meminfo", "vmid", vmid, "err", err)
-				} else {
-					host = ip
-					e.host = ip
-					if _, known := a.disc[vmid]; known || a.cfg.Auto.Enabled {
-						a.disc[vmid] = e
-					}
+					return 0, fmt.Errorf("talos vmid %d: meminfo endpoint address unknown — the agent reports no IPv4 (%w); run the meminfo-service extension with working guest-get-network-interfaces, or set host: on the source", vmid, err)
+				}
+				host = ip
+				e.host = ip
+				if _, known := a.disc[vmid]; known || a.cfg.Auto.Enabled {
+					a.disc[vmid] = e
 				}
 			}
 		}
-		if host != "" {
-			url = fmt.Sprintf("http://%s:%d%s", host, config.DefaultTalosPort, config.DefaultTalosPath)
-		}
+		url = fmt.Sprintf("http://%s:%d%s", host, config.DefaultTalosPort, config.DefaultTalosPath)
 	}
 
-	var endpointErr error
-	if url != "" {
-		out, err := a.HTTPFetch(httpc.Options{
-			URL: url, Token: s.Token, Headers: s.Headers,
-			Insecure: s.Insecure != nil && *s.Insecure, Timeout: a.cfg.HTTP.Timeout.Duration(),
-		})
-		if err == nil {
-			v, perr := memsrc.ParseMeminfoJSON(out)
-			if perr == nil {
-				return v, nil
-			}
-			endpointErr = perr
-		} else {
-			endpointErr = err
-		}
-		a.Log.Debug("talos: meminfo endpoint failed, falling back to /proc/meminfo", "vmid", vmid, "url", url, "err", endpointErr)
-	}
-
-	out, err := a.QGAExec(vmid, memsrc.LinuxCommand.Path, memsrc.LinuxCommand.Args)
+	out, err := a.HTTPFetch(httpc.Options{
+		URL: url, Token: s.Token, Headers: s.Headers,
+		Insecure: s.Insecure != nil && *s.Insecure, Timeout: a.cfg.HTTP.Timeout.Duration(),
+	})
 	if err != nil {
-		if endpointErr != nil {
-			return 0, fmt.Errorf("meminfo endpoint: %v; qga fallback: %w", endpointErr, err)
-		}
-		return 0, fmt.Errorf("qga /proc/meminfo fallback: %w", err)
+		return 0, fmt.Errorf("talos meminfo endpoint %s: %w", url, err)
 	}
-	v, perr := memsrc.ParseLinuxMeminfo(out)
-	if perr != nil {
-		if endpointErr != nil {
-			return 0, fmt.Errorf("meminfo endpoint: %v; qga fallback parse: %w", endpointErr, perr)
-		}
-		return 0, perr
+	v, err := memsrc.ParseMeminfoJSON(out)
+	if err != nil {
+		return 0, fmt.Errorf("talos meminfo endpoint %s: %w", url, err)
 	}
 	return v, nil
 }

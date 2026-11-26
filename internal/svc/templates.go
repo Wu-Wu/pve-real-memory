@@ -71,8 +71,9 @@ http:
 # http also takes url:/token:/headers: — the Talos meminfo-service extension
 # answers on http://<host>:1027/meminfo.
 # Talos guests with qemu-guest-agent are auto-discovered like any other VM:
-# os is detected from the agent, the endpoint URL is built from the agent's
-# IPv4, and /proc/meminfo via the agent is the outage fallback.
+# os is detected from the agent and the endpoint URL is built from the
+# agent's IPv4. The endpoint is the ONLY Talos channel (no shell there):
+# if it is unreachable the error is logged and the host view stays.
 #sources:
 #  - vmid: 101
 #    method: ssh

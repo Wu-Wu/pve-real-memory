@@ -314,8 +314,10 @@ autoDiscovery:
 	}
 }
 
-// Endpoint outage falls back to the agent's /proc/meminfo view.
-func TestTalosEndpointFallback(t *testing.T) {
+// The meminfo endpoint is the ONLY Talos channel (no shell, no
+// guest-exec in the Talos agent): any failure is an error, nothing is
+// written, and the agent is never exec'd.
+func TestTalosEndpointIsOnlyChannel(t *testing.T) {
 	a, ovr := testAgent(t, `
 interval: 1s
 overrideDir: "@OVR@"
@@ -325,23 +327,31 @@ sources:
     os: talos
 `)
 	a.HTTPFetch = func(httpc.Options) (string, error) { return "", errors.New("connection refused") }
-	a.QGAExec = func(vmid int, path string, args []string) (string, error) {
-		return "MemTotal: 1000 kB\nMemAvailable: 400 kB\n", nil
+	a.QGAIPv4 = func(int) (string, error) { return "10.9.9.9", nil }
+	a.QGAExec = func(int, string, []string) (string, error) {
+		panic("QGAExec must never be used for talos guests")
 	}
+	var logBuf bytes.Buffer
+	a.Log = slog.New(slog.NewTextHandler(&logBuf, nil))
 
 	a.cycle(context.Background())
 
-	raw, err := os.ReadFile(filepath.Join(ovr, "777.mem"))
-	if err != nil || strings.TrimSpace(string(raw)) != "614400" {
-		t.Errorf("fallback override = %q err=%v", raw, err)
-	}
-
-	// Both channels dead -> loud error, no write.
-	os.Remove(filepath.Join(ovr, "777.mem"))
-	a.QGAExec = func(int, string, []string) (string, error) { return "", errors.New("agent down") }
-	a.cycle(context.Background())
 	if _, err := os.Stat(filepath.Join(ovr, "777.mem")); !os.IsNotExist(err) {
-		t.Error("nothing should be written when both channels fail")
+		t.Error("endpoint failure must not write an override")
+	}
+	if !strings.Contains(logBuf.String(), "fetch failed") ||
+		!strings.Contains(logBuf.String(), "talos meminfo endpoint") {
+		t.Errorf("expected endpoint error log, got: %s", logBuf.String())
+	}
+
+	// No endpoint address at all (agent without interfaces RPC): loud,
+	// actionable error. Clear the cached discovery IP first.
+	delete(a.disc, 777)
+	a.HTTPFetch = func(httpc.Options) (string, error) { t.Fatal("must not fetch without a host"); return "", nil }
+	a.QGAIPv4 = func(int) (string, error) { return "", errors.New("rpc blocked") }
+	a.cycle(context.Background())
+	if !strings.Contains(logBuf.String(), "set host: on the source") {
+		t.Errorf("expected actionable host error, got tail: %s", logBuf.String()[max(0, len(logBuf.String())-400):])
 	}
 }
 
