@@ -138,6 +138,7 @@ declared with `method: http` (SSH is not usable there either).
 > is visible with `logLevel: debug`.
 
 ### SSH host keys
+
 Strict verification is on by default. Pin a guest once:
 
 ```sh
