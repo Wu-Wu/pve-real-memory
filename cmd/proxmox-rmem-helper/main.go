@@ -13,7 +13,7 @@ import (
 
 var version = "dev"
 
-const usage = `proxmox-rmem-helper — save/restore the proxmox-rmem configuration
+const usageFmt = `proxmox-rmem-helper %s — save/restore the proxmox-rmem configuration
 
 usage:
   proxmox-rmem-helper --backup    save /etc/proxmox-rmem (config.json,
@@ -35,8 +35,10 @@ The PVE patch itself is not part of the backup — the respective
 installer applies it on top of the live (possibly newer) PVE files.
 `
 
+func usage() string { return fmt.Sprintf(usageFmt, version) }
+
 func main() {
-	flag.Usage = func() { fmt.Print(usage) }
+	flag.Usage = func() { fmt.Print(usage()) }
 	backup := flag.Bool("backup", false, "save the current proxmox-rmem config")
 	restore := flag.Bool("restore", false, "restore the proxmox-rmem config from backup")
 	purge := flag.Bool("purge", false, "remove /etc/proxmox-rmem from the host")
@@ -56,7 +58,7 @@ func main() {
 		}
 	}
 	if n != 1 || (*now && !*purge) {
-		fmt.Print(usage)
+		fmt.Print(usage())
 		os.Exit(2)
 	}
 
