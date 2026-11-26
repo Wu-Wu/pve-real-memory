@@ -28,6 +28,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 )
 
@@ -147,6 +148,15 @@ func (s *session) setDeadline(t time.Time) { s.conn.SetDeadline(t) }
 
 func (s *session) close() { s.conn.Close() }
 
+// closedConn reports the shapes a peer disconnect takes across platforms:
+// the usual "chardev slot held by another client" collision.
+func closedConn(err error) bool {
+	return errors.Is(err, io.EOF) ||
+		errors.Is(err, syscall.ECONNRESET) ||
+		errors.Is(err, syscall.EPIPE) ||
+		errors.Is(err, net.ErrClosed)
+}
+
 // cmd sends one command and returns its reply, resyncing first.
 func (s *session) cmd(execute string, arguments map[string]any, deadline time.Time) (json.RawMessage, error) {
 	s.setDeadline(deadline)
@@ -158,6 +168,9 @@ func (s *session) cmd(execute string, arguments map[string]any, deadline time.Ti
 		"arguments": map[string]any{"id": id},
 	})
 	if _, err := s.conn.Write(append(syncMsg, '\n')); err != nil {
+		if closedConn(err) {
+			return nil, errors.New("agent closed the connection (is qga running in the guest, or is the socket held by another client?)")
+		}
 		return nil, fmt.Errorf("write sync: %w", err)
 	}
 	if err := s.readSyncAck(id, deadline); err != nil {
@@ -213,7 +226,7 @@ func (s *session) readSyncAck(id int64, deadline time.Time) error {
 		}
 		b, err := s.r.ReadByte()
 		if err != nil {
-			if err == io.EOF {
+			if closedConn(err) {
 				return errors.New("agent closed the connection (is qga running in the guest, or is the socket held by another client?)")
 			}
 			return fmt.Errorf("resync: %w", err)
