@@ -169,19 +169,27 @@ safety copy:
 ```sh
 proxmox-rmem-helper --backup    # BEFORE installing pve-real-memory,
                                 # if you may want to roll back later
-proxmox-rmem-helper --restore   # when rolling back: puts the saved
-                                # config back (survives a purge of the
-                                # old package; restart proxmox-rmem after)
+proxmox-rmem-helper --restore   # when rolling back: unpacks the saved
+                                # directory (survives a purge of the
+                                # old package; restart proxmox-rmem
+                                # afterwards)
 ```
 
-`--backup` copies `/etc/proxmox-rmem/config.json` to
-`/var/backups/proxmox-rmem/config.json`; `--restore` copies it back.
-If the source is missing (no config / no backup) each prints
+`--backup` tars the **whole** `/etc/proxmox-rmem` directory —
+`config.json`, the `id_rsa_monitor` key (losing it means redeploying
+authorized_keys on every guest) and the install stamp — into
+`/var/backups/proxmox-rmem/etc-proxmox-rmem.tar.gz` (mode 0600, since
+it holds a private key); `--restore` unpacks it back with the original
+permission bits. The PVE patch itself is deliberately not part of any
+snapshot: copying `QemuServer.pm` over a possibly-newer installed file
+is the old `.bak` downgrade defect — each project's installer applies
+its own patch on the live module.
+If the source is missing (no config dir / no archive) each prints
 "nothing to do" and exits 0 — that is a success, not an error. All
-messages go to stdout; a successful run reports paths, byte size and a
-sha256 prefix, and notes whether it replaced an existing
-backup/config. Writes are atomic (temp+rename, source permissions
-kept).
+messages go to stdout; a successful run reports paths, file/byte
+counts and a sha256 prefix, and notes whether it replaced an existing
+backup/config. Writes are atomic (temp+rename); archive entries with
+unsafe paths are refused.
 
 ## Development
 

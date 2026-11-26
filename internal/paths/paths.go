@@ -61,13 +61,13 @@ const (
 	LegacyScript       = "/usr/local/bin/proxmox-rmem.py"
 	LegacyPatchScript  = "/usr/local/bin/proxmox-rmem-patch.py"
 	LegacyConfigDir    = "/etc/proxmox-rmem"
-	LegacyConfigFile   = LegacyConfigDir + "/config.json"
 	LegacyBackupPM     = QemuServerPM + ".bak"
 	LegacyOverrideGlob = "/tmp/pve-vm-*-mem-override"
 	LegacyAutopatchLog = "/var/log/proxmox-rmem-autopatch.log"
 
 	// RmemBackupDir is the Debian-convention location for
-	// proxmox-rmem-helper's saved configuration.
+	// proxmox-rmem-helper's saved configuration (a tar.gz of the whole
+	// /etc/proxmox-rmem directory).
 	RmemBackupDir  = "/var/backups/proxmox-rmem"
-	RmemBackupFile = RmemBackupDir + "/config.json"
+	RmemBackupFile = RmemBackupDir + "/etc-proxmox-rmem.tar.gz"
 )

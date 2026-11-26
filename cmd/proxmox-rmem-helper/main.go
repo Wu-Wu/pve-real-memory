@@ -16,13 +16,18 @@ var version = "dev"
 const usage = `proxmox-rmem-helper — save/restore the proxmox-rmem configuration
 
 usage:
-  proxmox-rmem-helper --backup    save the current config
-                                (/etc/proxmox-rmem/config.json -> /var/backups/proxmox-rmem/config.json)
-  proxmox-rmem-helper --restore   put the saved config back
+  proxmox-rmem-helper --backup    save /etc/proxmox-rmem (config.json,
+                                ssh keys, install stamp) as a single
+                                archive: /var/backups/proxmox-rmem/etc-proxmox-rmem.tar.gz
+  proxmox-rmem-helper --restore   unpack the archive back into
+                                /etc/proxmox-rmem (dir is created if
+                                the old package was purged)
   proxmox-rmem-helper --version   print version
 
 Run --backup before installing pve-real-memory if you may want to roll
 back later; --restore is useful after a purge of the old package.
+The PVE patch itself is not part of the backup — the respective
+installer applies it on top of the live (possibly newer) PVE files.
 `
 
 func main() {
