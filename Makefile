@@ -22,9 +22,19 @@ RUN := $(DOCKER) run --rm $(GOFLAGS_ENV) \
 	-v prm-gomod:/go/pkg/mod -v prm-gocache:/root/.cache/go-build \
 	$(IMAGE)
 
-.PHONY: all build build-local test vet fmt tidy cover shell clean image
+.PHONY: all build build-local test vet fmt tidy cover shell clean image version tag
 
 all: build
+
+## version: show the stamp the next build will embed (git describe)
+version:
+	@echo $(VERSION)
+
+## tag: cut a release: make tag TAG=v1.2.0  (then: make build)
+tag:
+	@test -n "$(TAG)" || { echo "usage: make tag TAG=v1.2.0"; exit 2; }
+	@git tag -a "$(TAG)" -m "release $(TAG)"
+	@echo "tagged $(TAG); next build stamps: $$(git describe --tags)"
 
 ## image: pull the builder image
 image:

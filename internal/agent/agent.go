@@ -33,6 +33,7 @@ import (
 type Agent struct {
 	CfgPath string
 	Log     *slog.Logger
+	Version string // build stamp, reported in the startup log
 	lv      *slog.LevelVar
 
 	// Transports are overridable for tests.
@@ -508,8 +509,9 @@ func (a *Agent) Run(ctx context.Context) error {
 	ctx, stop := signal.NotifyContext(ctx, syscall.SIGHUP, syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
 
-	a.Log.Info("starting", "config", a.CfgPath, "interval", a.cfg.Interval.String(),
-		"sources", len(a.cfg.Sources), "auto", a.cfg.Auto.Enabled)
+	a.Log.Info("starting", "version", a.Version, "config", a.CfgPath,
+		"interval", a.cfg.Interval.String(), "sources", len(a.cfg.Sources),
+		"auto", a.cfg.Auto.Enabled)
 
 	if a.PatchOK() != patch.Applied {
 		a.Log.Warn("vmstatus patch is NOT applied; overrides will have no visible effect (run --install or check autoRepair)")

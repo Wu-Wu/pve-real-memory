@@ -210,6 +210,22 @@ Tested against the `vmstatus()` source of Proxmox qemu-server 9.2 and
 9.3 (fixtures in `internal/patch/testdata/`); the patcher refuses to
 touch a file it can't anchor with a clear error instead of guessing.
 
+### Versioning
+
+There is no version file to keep in sync: every build stamps
+`git describe --tags --always` (`-dirty` suffix when the tree is
+unclean) into both binaries via ldflags. It is shown by
+`pve-real-memory version` / `--version`, as the first line of
+`pve-real-memory status`, in the daemon's startup log, and via
+`go version -m <binary>`. Cutting a release is one annotated tag:
+
+```sh
+make tag TAG=v1.0.0    # git tag -a v1.0.0
+make build             # bin/*-linux-* now report "v1.0.0"
+```
+
+`make version` prints what the next build will embed.
+
 ## Security notes
 
 - Override store is a root-only `0700` runtime dir with `0600` files,

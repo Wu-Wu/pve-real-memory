@@ -55,6 +55,7 @@ func main() {
 		if err != nil {
 			fatal("config", err)
 		}
+		a.Version = version
 		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 		defer stop()
 		if err := a.Run(ctx); err != nil {
@@ -69,6 +70,7 @@ func main() {
 		if err != nil {
 			fatal("config", err)
 		}
+		a.Version = version
 		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 		defer stop()
 		if err := a.Once(ctx); err != nil {
@@ -76,6 +78,7 @@ func main() {
 		}
 
 	case "status":
+		fmt.Printf("pve-real-memory %s\n", version)
 		fmt.Print(svc.StatusText(defaultOps()))
 
 	case "repair":
