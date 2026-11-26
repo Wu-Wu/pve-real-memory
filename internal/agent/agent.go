@@ -31,6 +31,7 @@ import (
 type Agent struct {
 	CfgPath string
 	Log     *slog.Logger
+	lv      *slog.LevelVar
 
 	// Transports are overridable for tests.
 	QGAExec    func(vmid int, path string, args []string) (string, error)
@@ -62,11 +63,12 @@ type discEntry struct {
 	added time.Time
 }
 
-// New wires production transports.
-func New(cfgPath string, log *slog.Logger) (*Agent, error) {
+// New loads the config and wires production transports. The logger is
+// built from config logLevel and re-leveled on reload.
+func New(cfgPath string) (*Agent, error) {
 	a := &Agent{
 		CfgPath: cfgPath,
-		Log:     log,
+		lv:      &slog.LevelVar{},
 		state:   map[int]*vmState{},
 		disc:    map[int]discEntry{},
 	}
@@ -75,12 +77,25 @@ func New(cfgPath string, log *slog.Logger) (*Agent, error) {
 	if err != nil {
 		return nil, err
 	}
+	a.Log = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: a.lv}))
+	a.applyLevel()
 	a.applyConfig()
 	a.RestartPVE = func() error { return system.RestartUnits(system.PVERestartUnits...) }
 	a.PatchOK = func() patch.Status {
 		return (&patch.Engine{Path: pmPath(), OverrideDir: a.cfg.OverrideDir, TTLSeconds: config.PatchTTLSeconds}).Status()
 	}
 	return a, nil
+}
+
+func (a *Agent) applyLevel() {
+	if a.lv == nil { // hand-constructed test agents
+		return
+	}
+	var lvl slog.Level
+	if err := lvl.UnmarshalText([]byte(a.cfg.LogLevel)); err != nil {
+		lvl = slog.LevelInfo
+	}
+	a.lv.Set(lvl)
 }
 
 func pmPath() string {
@@ -133,6 +148,7 @@ func (a *Agent) reloadIfChanged() {
 	}
 	a.cfg = cfg
 	a.cfgMod = fi.ModTime()
+	a.applyLevel()
 	a.applyConfig()
 	a.Log.Info("config reloaded", "sources", len(cfg.Sources), "auto", cfg.Auto.Enabled)
 }

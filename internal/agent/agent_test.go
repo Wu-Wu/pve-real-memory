@@ -275,6 +275,29 @@ overrideDir: "@OVR@"
 	_ = ovr
 }
 
+// End-to-end through the production constructor (logger + level wiring).
+func TestNewConstructor(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := os.WriteFile(cfgPath, []byte("logLevel: debug\noverrideDir: \""+dir+"/ovr\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	a, err := New(cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.Log == nil || !a.Log.Enabled(context.Background(), slog.LevelDebug) {
+		t.Error("logLevel: debug must enable debug")
+	}
+	a.HTTPFetch = func(httpc.Options) (string, error) { return `{"used": 42}`, nil }
+	if err := a.Once(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "ovr")); err != nil {
+		t.Error("override dir must exist after New")
+	}
+}
+
 func TestOnceReports(t *testing.T) {
 	a, _ := testAgent(t, `
 overrideDir: "`+t.TempDir()+`"
