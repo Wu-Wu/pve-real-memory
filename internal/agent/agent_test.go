@@ -37,7 +37,7 @@ func testAgent(t *testing.T, cfgYAML string) (*Agent, string) {
 		disc:    map[int]discEntry{},
 	}
 	var err error
-	a.cfg, a.cfgMod, err = a.loadConfig()
+	a.cfg, a.cfgHash, err = a.loadConfig()
 	if err != nil {
 		t.Fatal(err)
 	}

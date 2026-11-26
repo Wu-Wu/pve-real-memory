@@ -5,7 +5,9 @@
 package agent
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -43,7 +45,7 @@ type Agent struct {
 	PatchOK    func() patch.Status
 
 	cfg      *config.Config
-	cfgMod   time.Time
+	cfgHash  []byte // content fingerprint: reloads can't be missed (mtime ticks) or spammed
 	store    *override.Store
 	qgaRun   *qga.Runner
 	state    map[int]*vmState
@@ -75,7 +77,7 @@ func New(cfgPath string) (*Agent, error) {
 		disc:    map[int]discEntry{},
 	}
 	var err error
-	a.cfg, a.cfgMod, err = a.loadConfig()
+	a.cfg, a.cfgHash, err = a.loadConfig()
 	if err != nil {
 		return nil, err
 	}
@@ -107,16 +109,17 @@ func pmPath() string {
 	return paths.QemuServerPM
 }
 
-func (a *Agent) loadConfig() (*config.Config, time.Time, error) {
-	fi, err := os.Stat(a.CfgPath)
+func (a *Agent) loadConfig() (*config.Config, []byte, error) {
+	raw, err := os.ReadFile(a.CfgPath)
 	if err != nil {
-		return nil, time.Time{}, err
+		return nil, nil, err
 	}
-	cfg, err := config.Load(a.CfgPath)
+	cfg, err := config.Parse(raw)
 	if err != nil {
-		return nil, time.Time{}, err
+		return nil, nil, err
 	}
-	return cfg, fi.ModTime(), nil
+	sum := sha256.Sum256(raw)
+	return cfg, sum[:], nil
 }
 
 func (a *Agent) applyConfig() {
@@ -132,25 +135,27 @@ func (a *Agent) applyConfig() {
 	a.HTTPFetch = httpc.Fetch
 }
 
-// reloadIfChanged re-reads config when the file changed; logs and keeps
-// per-VM state across reloads.
+// reloadIfChanged re-reads config when its content changed (fingerprint,
+// not mtime: same-tick edits must not be missed); keeps per-VM state
+// across reloads and does not spam when the file is broken.
 func (a *Agent) reloadIfChanged() {
-	fi, err := os.Stat(a.CfgPath)
+	raw, err := os.ReadFile(a.CfgPath)
 	if err != nil {
 		a.Log.Warn("config stat failed, keeping current config", "err", err)
 		return
 	}
-	if fi.ModTime().Equal(a.cfgMod) {
+	sum := sha256.Sum256(raw)
+	if bytes.Equal(sum[:], a.cfgHash) {
 		return
 	}
-	cfg, err := config.Load(a.CfgPath)
+	cfg, err := config.Parse(raw)
 	if err != nil {
 		a.Log.Error("config reload failed, keeping current config", "err", err)
-		a.cfgMod = fi.ModTime() // don't spam every cycle
+		a.cfgHash = sum[:] // don't re-log every cycle
 		return
 	}
 	a.cfg = cfg
-	a.cfgMod = fi.ModTime()
+	a.cfgHash = sum[:]
 	a.applyLevel()
 	a.applyConfig()
 	a.Log.Info("config reloaded", "sources", len(cfg.Sources), "auto", cfg.Auto.Enabled)
