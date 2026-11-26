@@ -16,10 +16,11 @@ import (
 // fakeAgent mimics qemu-guest-agent JSONL framing, including the
 // guest-sync-delimited 0xFF sentinel and stale-byte emission.
 type fakeAgent struct {
-	t         *testing.T
-	dir       string
-	stale     string // bytes emitted before the first sync reply
-	closeFast bool   // immediately close every connection
+	t          *testing.T
+	dir        string
+	stale      string // bytes emitted before the first sync reply
+	closeFast  bool   // immediately close every connection
+	exitedJSON string // JSON literal for exec-status "exited" (default true)
 }
 
 func newFakeAgent(t *testing.T, opts *fakeAgent) *fakeAgent {
@@ -83,7 +84,11 @@ func (f *fakeAgent) handle(c net.Conn) {
 			fmt.Fprint(w, "{\"return\": {\"pid\": 4242}}\n")
 		case "guest-exec-status":
 			out := base64.StdEncoding.EncodeToString([]byte("MemTotal: 4000000 kB\n"))
-			fmt.Fprintf(w, "{\"return\": {\"exitcode\": 0, \"exited\": true, \"out-data\": %q}}\n", out)
+			exited := f.exitedJSON
+			if exited == "" {
+				exited = "true"
+			}
+			fmt.Fprintf(w, "{\"return\": {\"exitcode\": 0, \"exited\": %s, \"out-data\": %q}}\n", exited, out)
 		case "guest-get-osinfo":
 			fmt.Fprint(w, "{\"return\": {\"name\": \"Debian GNU Bookworm 12\", \"id\": \"debian\", \"kernel-release\": \"6.1.0\"}}\n")
 		case "guest-get-network-interfaces":
@@ -123,6 +128,29 @@ func TestStaleBytesAreDiscarded(t *testing.T) {
 	}
 	if !strings.Contains(out, "MemTotal") {
 		t.Errorf("out = %q", out)
+	}
+}
+
+// Some deployments hand us "exited" as 1/0 (schema says boolean) — the
+// poll loop must terminate on every shape.
+func TestExecExitedNumeric(t *testing.T) {
+	f := newFakeAgent(t, &fakeAgent{exitedJSON: "1"})
+	out, err := f.runner().Exec(7, "cat", nil)
+	if err != nil {
+		t.Fatalf("numeric exited=true must work: %v", err)
+	}
+	if !strings.Contains(out, "MemTotal") {
+		t.Errorf("out = %q", out)
+	}
+}
+
+func TestTruthyShapes(t *testing.T) {
+	for raw, want := range map[string]bool{
+		"true": true, "false": false, "1": true, "0": false, `"true"`: true, `"false"`: false,
+	} {
+		if got := truthy(json.RawMessage(raw)); got != want {
+			t.Errorf("truthy(%s) = %v", raw, got)
+		}
 	}
 }
 

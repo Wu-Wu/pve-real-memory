@@ -322,15 +322,15 @@ func (r *Runner) Exec(vmid int, path string, args []string) (string, error) {
 			return "", err
 		}
 		var st struct {
-			Exited   *bool  `json:"exited"`
-			ExitCode *int   `json:"exitcode"`
-			OutData  string `json:"out-data"`
-			ErrData  string `json:"err-data"`
+			Exited   json.RawMessage `json:"exited"`
+			ExitCode *int            `json:"exitcode"`
+			OutData  string          `json:"out-data"`
+			ErrData  string          `json:"err-data"`
 		}
 		if err := json.Unmarshal(raw, &st); err != nil {
 			return "", fmt.Errorf("bad exec-status: %w", err)
 		}
-		if st.Exited != nil && *st.Exited {
+		if truthy(st.Exited) {
 			code := -1
 			if st.ExitCode != nil {
 				code = *st.ExitCode
@@ -343,6 +343,26 @@ func (r *Runner) Exec(vmid int, path string, args []string) (string, error) {
 		}
 		time.Sleep(r.PollInterval)
 	}
+}
+
+// truthy parses the QGA "exited" field tolerantly: the schema says
+// boolean, but real agents and PVE's JSON rendering hand it over as
+// true/false, 1/0 or even "true" — every shape must end the poll loop.
+func truthy(raw json.RawMessage) bool {
+	var b bool
+	if err := json.Unmarshal(raw, &b); err == nil {
+		return b
+	}
+	var n float64
+	if err := json.Unmarshal(raw, &n); err == nil {
+		return n != 0
+	}
+	var s string
+	if err := json.Unmarshal(raw, &s); err == nil {
+		s = strings.ToLower(s)
+		return s == "true" || s == "yes" || s == "1"
+	}
+	return false
 }
 
 func decodeB64(s string) string {
