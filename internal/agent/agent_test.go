@@ -275,6 +275,76 @@ overrideDir: "@OVR@"
 	_ = ovr
 }
 
+// Talos auto-discovery: osinfo says talos -> endpoint URL is built from
+// the agent-reported IPv4 and cached.
+func TestTalosAutoDiscoveryEndpoint(t *testing.T) {
+	a, ovr := testAgent(t, `
+interval: 1s
+overrideDir: "@OVR@"
+autoDiscovery:
+  enabled: true
+`)
+	sockDir := filepath.Join(t.TempDir(), "qs")
+	os.MkdirAll(sockDir, 0o755)
+	os.WriteFile(filepath.Join(sockDir, "777.qga"), nil, 0o600)
+	a.cfg.QGA.SocketDir = sockDir
+	a.discAt = time.Time{}
+
+	a.QGAOSInfo = func(vmid int) (*qga.OSInfo, error) {
+		return &qga.OSInfo{Name: "Talos", ID: "talos"}, nil
+	}
+	a.QGAIPv4 = func(vmid int) (string, error) { return "10.0.0.5", nil }
+	var gotURL string
+	a.HTTPFetch = func(o httpc.Options) (string, error) {
+		gotURL = o.URL
+		return `{"total":2000,"avail":500,"used":1500}`, nil
+	}
+
+	a.cycle(context.Background())
+
+	if gotURL != "http://10.0.0.5:1027/meminfo" {
+		t.Errorf("endpoint url = %q", gotURL)
+	}
+	raw, err := os.ReadFile(filepath.Join(ovr, "777.mem"))
+	if err != nil || strings.TrimSpace(string(raw)) != "1500" {
+		t.Errorf("override = %q err=%v", raw, err)
+	}
+	if a.disc[777].host != "10.0.0.5" {
+		t.Errorf("discovered ip not cached: %+v", a.disc[777])
+	}
+}
+
+// Endpoint outage falls back to the agent's /proc/meminfo view.
+func TestTalosEndpointFallback(t *testing.T) {
+	a, ovr := testAgent(t, `
+interval: 1s
+overrideDir: "@OVR@"
+sources:
+  - vmid: 777
+    method: qga
+    os: talos
+`)
+	a.HTTPFetch = func(httpc.Options) (string, error) { return "", errors.New("connection refused") }
+	a.QGAExec = func(vmid int, path string, args []string) (string, error) {
+		return "MemTotal: 1000 kB\nMemAvailable: 400 kB\n", nil
+	}
+
+	a.cycle(context.Background())
+
+	raw, err := os.ReadFile(filepath.Join(ovr, "777.mem"))
+	if err != nil || strings.TrimSpace(string(raw)) != "614400" {
+		t.Errorf("fallback override = %q err=%v", raw, err)
+	}
+
+	// Both channels dead -> loud error, no write.
+	os.Remove(filepath.Join(ovr, "777.mem"))
+	a.QGAExec = func(int, string, []string) (string, error) { return "", errors.New("agent down") }
+	a.cycle(context.Background())
+	if _, err := os.Stat(filepath.Join(ovr, "777.mem")); !os.IsNotExist(err) {
+		t.Error("nothing should be written when both channels fail")
+	}
+}
+
 // End-to-end through the production constructor (logger + level wiring).
 func TestNewConstructor(t *testing.T) {
 	dir := t.TempDir()

@@ -28,7 +28,7 @@ One static Go binary per Proxmox node plus one YAML config:
    over the best transport:
    | transport | guests | what runs where |
    |---|---|---|
-   | `qga` | Linux, FreeBSD, Windows | `guest-exec` via `/run/qemu-server/<vmid>.qga` (resync-framed, collision-safe) |
+   | `qga` | Linux, FreeBSD, Windows, Talos (detected → endpoint-based) | `guest-exec` via `/run/qemu-server/<vmid>.qga` (resync-framed, collision-safe) |
    | `ssh` | Linux, FreeBSD | `cat /proc/meminfo` / `sysctl` with strict host-key pinning |
    | `http` | Talos Linux | [`meminfo-service`](https://github.com/Wu-Wu/meminfo-service) extension endpoint `http://<node>:1027/meminfo` |
    Windows uses PowerShell `Get-CimInstance Win32_OperatingSystem`
@@ -101,12 +101,23 @@ ssh:
 sources:                # explicit wins over auto-discovery
   - vmid: 101
     method: ssh
-    os: freebsd         # linux | freebsd | auto (qga only)
+    os: freebsd         # linux | freebsd | talos | auto (qga only)
     host: 10.10.10.11
   - vmid: 303
-    method: http        # Talos node running the meminfo-service extension
+    method: http        # Talos node without QGA, pinned explicitly
     host: 192.168.2.30
 ```
+
+### Talos guests
+
+Talos is auto-discovered like any other VM **when the qemu-guest-agent
+system extension is present**: `guest-get-osinfo` reports `ID=talos`,
+collection then goes to the [`meminfo-service`](https://github.com/Wu-Wu/meminfo-service)
+extension endpoint at `http://<agent-reported-IPv4>:1027/meminfo`
+(the IP is cached with the discovery entry; a `host:` on the source pins
+it explicitly). If the endpoint is down, the agent's `/proc/meminfo`
+view is used as fallback. Talos nodes without QGA are declared with
+`method: http` and `host:` (SSH is not usable there — no shell).
 
 ### SSH host keys
 
@@ -120,6 +131,11 @@ pve-real-memory forget-host 10.10.10.11       # after a deliberate key rotation
 The fetch error for an unknown key tells you exactly this command.
 Group/world-readable private keys and passphrase-protected keys are
 refused with an actionable message rather than skipped.
+
+Each `ssh` source may carry its own `user:` / `port:` / `privateKey:` —
+useful where root login is forbidden: point the source at a dedicated
+monitor user (both collectors, `cat /proc/meminfo` and the FreeBSD
+`sysctl`s, are world-readable).
 
 ### Keeping the patch across Proxmox upgrades
 

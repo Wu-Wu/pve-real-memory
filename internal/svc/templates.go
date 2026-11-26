@@ -65,15 +65,19 @@ ssh:
 http:
   timeout: 10s
 
-# Explicit sources (method: qga | ssh | http; os: auto | linux | freebsd | windows).
-# ssh/http sources need host:; http also takes url:/token:/headers: (Talos nodes
-# run the meminfo-service extension and answer on http://<host>:1027/meminfo).
+# Explicit sources (method: qga | ssh | http; os: auto | linux | freebsd | windows | talos).
+# ssh/http sources need host:.
+# http also takes url:/token:/headers: — the Talos meminfo-service extension
+# answers on http://<host>:1027/meminfo.
+# Talos guests with qemu-guest-agent are auto-discovered like any other VM:
+# os is detected from the agent, the endpoint URL is built from the agent's
+# IPv4, and /proc/meminfo via the agent is the outage fallback.
 #sources:
 #  - vmid: 101
 #    method: ssh
 #    os: freebsd
 #    host: 10.10.10.11
 #  - vmid: 303
-#    method: http
+#    method: http        # Talos node without QGA: endpoint explicitly
 #    host: 192.168.2.30
 `

@@ -73,6 +73,7 @@ const (
 	OSLinux   = "linux"
 	OSFreeBSD = "freebsd"
 	OSWindows = "windows"
+	OSTalos   = "talos"
 )
 
 // SSHDefaults are the global SSH transport settings; individual sources may
@@ -287,9 +288,9 @@ func (c *Config) Validate() error {
 		}
 
 		switch s.OS {
-		case OSAuto, OSLinux, OSFreeBSD, OSWindows:
+		case OSAuto, OSLinux, OSFreeBSD, OSWindows, OSTalos:
 		default:
-			errs = append(errs, fmt.Sprintf("%s: unknown os %q (want auto|linux|freebsd|windows)", tag, s.OS))
+			errs = append(errs, fmt.Sprintf("%s: unknown os %q (want auto|linux|freebsd|windows|talos)", tag, s.OS))
 		}
 
 		switch s.Method {
@@ -303,6 +304,9 @@ func (c *Config) Validate() error {
 			}
 			if s.OS == OSWindows {
 				errs = append(errs, tag+": windows guests are supported via qga only")
+			}
+			if s.OS == OSTalos {
+				errs = append(errs, tag+": talos guests are supported via qga (auto-discovery) or http (meminfo-service endpoint)")
 			}
 		case MethodHTTP:
 			if s.URL == "" && s.Host == "" {

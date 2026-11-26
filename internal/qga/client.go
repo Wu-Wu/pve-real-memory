@@ -376,6 +376,11 @@ func (o *OSInfo) Detect() string {
 	if strings.Contains(name, "windows") || strings.Contains(name, "microsoft") || strings.Contains(id, "windows") {
 		return "windows"
 	}
+	// Talos reports ID=talos; it is Linux-kernel based but needs its own
+	// collection path (meminfo-service endpoint preferred).
+	if strings.Contains(id, "talos") || strings.Contains(name, "talos") {
+		return "talos"
+	}
 	for _, bsd := range []string{"freebsd", "openbsd", "netbsd", "opnsense", "pfsense"} {
 		if strings.Contains(id, bsd) || strings.Contains(name, bsd) || strings.Contains(kernel, bsd) {
 			return "freebsd"
@@ -385,6 +390,48 @@ func (o *OSInfo) Detect() string {
 		return "linux"
 	}
 	return ""
+}
+
+// GetIPv4 returns the first non-loopback IPv4 the agent reports, used to
+// reach Talos guests' HTTP endpoints when the source has no explicit
+// host configured.
+func (r *Runner) GetIPv4(vmid int) (string, error) {
+	mu := r.lock(vmid)
+	mu.Lock()
+	defer mu.Unlock()
+
+	deadline := time.Now().Add(r.Timeout)
+	s, err := r.dial(vmid, deadline)
+	if err != nil {
+		return "", err
+	}
+	defer s.close()
+
+	raw, err := s.cmd("guest-get-network-interfaces", map[string]any{"ignored-virtnames": []string{"lo"}}, deadline)
+	if err != nil {
+		return "", err
+	}
+	var ifaces []struct {
+		Name        string `json:"name"`
+		IPAddresses []struct {
+			IPAddress     string `json:"ip-address"`
+			IPAddressType string `json:"ip-address-type"`
+		} `json:"ip-addresses"`
+	}
+	if err := json.Unmarshal(raw, &ifaces); err != nil {
+		return "", fmt.Errorf("bad interfaces reply: %w", err)
+	}
+	for _, ifc := range ifaces {
+		if ifc.Name == "lo" {
+			continue
+		}
+		for _, addr := range ifc.IPAddresses {
+			if addr.IPAddressType == "ipv4" && addr.IPAddress != "" && !strings.HasPrefix(addr.IPAddress, "127.") {
+				return addr.IPAddress, nil
+			}
+		}
+	}
+	return "", fmt.Errorf("agent reports no routable IPv4 address")
 }
 
 // GetOSInfo queries the agent for guest identity.

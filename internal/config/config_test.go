@@ -99,6 +99,13 @@ sources:
     host: h
     os: windows
 `,
+		"talos over ssh": `
+sources:
+  - vmid: 101
+    method: ssh
+    host: h
+    os: talos
+`,
 		"unknown method": `
 sources:
   - vmid: 101
@@ -168,5 +175,24 @@ func TestIntervalFloor(t *testing.T) {
 		t.Error("sub-second interval must be rejected")
 	} else if !strings.Contains(err.Error(), "at least") {
 		t.Errorf("error text = %v", err)
+	}
+}
+
+func TestTalosOSAccepted(t *testing.T) {
+	cfg, err := Parse([]byte(`
+sources:
+  - vmid: 301
+    method: qga
+    os: talos
+  - vmid: 302
+    method: http
+    os: talos
+    host: 10.0.0.8
+`))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if cfg.Sources[0].OS != OSTalos || cfg.Sources[1].OS != OSTalos {
+		t.Errorf("talos os lost: %+v", cfg.Sources)
 	}
 }

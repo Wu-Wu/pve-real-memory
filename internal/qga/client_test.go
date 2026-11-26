@@ -86,6 +86,8 @@ func (f *fakeAgent) handle(c net.Conn) {
 			fmt.Fprintf(w, "{\"return\": {\"exitcode\": 0, \"exited\": true, \"out-data\": %q}}\n", out)
 		case "guest-get-osinfo":
 			fmt.Fprint(w, "{\"return\": {\"name\": \"Debian GNU Bookworm 12\", \"id\": \"debian\", \"kernel-release\": \"6.1.0\"}}\n")
+		case "guest-get-network-interfaces":
+			fmt.Fprint(w, "{\"return\": [{\"name\": \"lo\", \"ip-addresses\": [{\"ip-address\": \"127.0.0.1\", \"ip-address-type\": \"ipv4\"}]}, {\"name\": \"eth0\", \"ip-addresses\": [{\"ip-address\": \"10.0.0.5\", \"ip-address-type\": \"ipv4\"}, {\"ip-address\": \"fe80::1\", \"ip-address-type\": \"ipv6\"}]}]}\n")
 		case "must-fail":
 			fmt.Fprint(w, "{\"error\": {\"class\": \"GenericError\", \"desc\": \"boom\"}}\n")
 		default:
@@ -160,6 +162,7 @@ func TestDetectOS(t *testing.T) {
 		want string
 	}{
 		{OSInfo{ID: "opnsense", Name: "OPNsense"}, "freebsd"},
+		{OSInfo{ID: "talos", Name: "Talos"}, "talos"},
 		{OSInfo{ID: "debian", Name: "Debian GNU/Linux 12"}, "linux"},
 		{OSInfo{Name: "Microsoft Windows 11 Pro", ID: "windows"}, "windows"},
 		{OSInfo{Name: "FreeBSD", KernelRelease: "14.0-RELEASE"}, "freebsd"},
@@ -169,6 +172,17 @@ func TestDetectOS(t *testing.T) {
 		if got := c.info.Detect(); got != c.want {
 			t.Errorf("Detect(%+v) = %q, want %q", c.info, got, c.want)
 		}
+	}
+}
+
+func TestGetIPv4(t *testing.T) {
+	f := newFakeAgent(t, &fakeAgent{})
+	ip, err := f.runner().GetIPv4(7)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ip != "10.0.0.5" {
+		t.Errorf("ip = %q, want 10.0.0.5 (skip lo and ipv6)", ip)
 	}
 }
 
