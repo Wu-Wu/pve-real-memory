@@ -361,6 +361,8 @@ type OSInfo struct {
 	Name          string `json:"name"`
 	ID            string `json:"id"`
 	KernelRelease string `json:"kernel-release"`
+	Variant       string `json:"variant"`
+	VariantID     string `json:"variant-id"`
 }
 
 // Detect maps agent-reported identity to our OS vocabulary; "" when the
@@ -376,13 +378,16 @@ func (o *OSInfo) Detect() string {
 	if strings.Contains(name, "windows") || strings.Contains(name, "microsoft") || strings.Contains(id, "windows") {
 		return "windows"
 	}
-	// Talos reports ID=talos; it is Linux-kernel based but needs its own
-	// collection path (meminfo-service endpoint preferred).
-	if strings.Contains(id, "talos") || strings.Contains(name, "talos") {
+	// Talos: real agents (v1.13) report ONLY kernel-* fields — no id,
+	// no name — with the kernelRelease carrying the "-talos" suffix.
+	// It is Linux-kernel based but needs its own collection path
+	// (meminfo-service endpoint preferred).
+	if strings.Contains(id, "talos") || strings.Contains(name, "talos") || strings.Contains(kernel, "talos") {
 		return "talos"
 	}
 	for _, bsd := range []string{"freebsd", "openbsd", "netbsd", "opnsense", "pfsense"} {
-		if strings.Contains(id, bsd) || strings.Contains(name, bsd) || strings.Contains(kernel, bsd) {
+		if strings.Contains(id, bsd) || strings.Contains(name, bsd) || strings.Contains(kernel, bsd) ||
+			strings.Contains(strings.ToLower(o.VariantID), bsd) || strings.Contains(strings.ToLower(o.Variant), bsd) {
 			return "freebsd"
 		}
 	}

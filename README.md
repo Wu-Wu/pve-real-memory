@@ -113,8 +113,10 @@ sources:                # explicit wins over auto-discovery
 ### Talos guests
 
 Talos is auto-discovered like any other VM **when the qemu-guest-agent
-system extension is present**: `guest-get-osinfo` reports `ID=talos`,
-collection then goes to the [`meminfo-service`](https://github.com/Wu-Wu/meminfo-service)
+system extension is present**: `guest-get-osinfo` is mapped to
+`os: talos` (real agents report only `kernel-release: X-talos`, without
+`id`/`name`), collection then goes to the
+[`meminfo-service`](https://github.com/Wu-Wu/meminfo-service)
 extension endpoint at `http://<agent-reported-IPv4>:1027/meminfo`
 (the IP is cached with the discovery entry; a `host:` on the source pins
 it explicitly). The endpoint is the **only** Talos channel — the guest
@@ -125,8 +127,14 @@ and writes nothing: the hook's TTL leaves the host view in place.
 that RPC pin the address with `host:`. Nodes without the agent are
 declared with `method: http` (SSH is not usable there either).
 
-### SSH host keys
+> Note: agent builds differ in supported RPCs — real-world examples:
+> Talos 1.13 reports only `kernel-release` (detected via the `-talos`
+> suffix); some Windows agent builds lack `guest-get-osinfo` entirely
+> (they need an explicit `os: windows` on the source). Auto-discovery
+> skips guests whose identity the agent cannot report; the skipped VM
+> is visible with `logLevel: debug`.
 
+### SSH host keys
 Strict verification is on by default. Pin a guest once:
 
 ```sh

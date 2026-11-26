@@ -161,9 +161,16 @@ func TestDetectOS(t *testing.T) {
 		info OSInfo
 		want string
 	}{
+		// real-world payloads (2026-11):
+		{OSInfo{ID: "freebsd", Name: "FreeBSD", KernelRelease: "15.1-RELEASE-p6",
+			Variant: "OPNsense 26.7.8_2 (amd64)", VariantID: "opnsense"}, "freebsd"},
+		{OSInfo{ID: "debian", Name: "Debian GNU/Linux", KernelRelease: "6.12.115+deb13.1-cloud-amd64"}, "linux"},
+		// Talos 1.13 agent: kernel-* fields ONLY, no id/name at all.
+		{OSInfo{KernelRelease: "6.18.57-talos"}, "talos"},
+		// synthetic shapes:
 		{OSInfo{ID: "opnsense", Name: "OPNsense"}, "freebsd"},
+		{OSInfo{VariantID: "opnsense", KernelRelease: "24.7"}, "freebsd"},
 		{OSInfo{ID: "talos", Name: "Talos"}, "talos"},
-		{OSInfo{ID: "debian", Name: "Debian GNU/Linux 12"}, "linux"},
 		{OSInfo{Name: "Microsoft Windows 11 Pro", ID: "windows"}, "windows"},
 		{OSInfo{Name: "FreeBSD", KernelRelease: "14.0-RELEASE"}, "freebsd"},
 		{OSInfo{}, ""},
