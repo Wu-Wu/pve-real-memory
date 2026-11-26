@@ -66,7 +66,8 @@ http:
   timeout: 10s
 
 # Explicit sources (method: qga | ssh | http; os: auto | linux | freebsd | windows | talos).
-# ssh/http sources need host:.
+# ssh/http sources need host:; each ssh source may override user/port/privateKey
+# (root login is often forbidden — name a dedicated monitor user per VM).
 # http also takes url:/token:/headers: — the Talos meminfo-service extension
 # answers on http://<host>:1027/meminfo.
 # Talos guests with qemu-guest-agent are auto-discovered like any other VM:
@@ -77,6 +78,9 @@ http:
 #    method: ssh
 #    os: freebsd
 #    host: 10.10.10.11
+#    user: monitor        # overrides ssh.user
+#    port: 2022           # overrides ssh.port
+#    privateKey: /etc/pve-real-memory/keys/vm101  # overrides ssh.privateKey
 #  - vmid: 303
 #    method: http        # Talos node without QGA: endpoint explicitly
 #    host: 192.168.2.30

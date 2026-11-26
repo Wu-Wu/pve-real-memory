@@ -29,7 +29,7 @@ One static Go binary per Proxmox node plus one YAML config:
    | transport | guests | what runs where |
    |---|---|---|
    | `qga` | Linux, FreeBSD, Windows, Talos (detected → endpoint-based) | `guest-exec` via `/run/qemu-server/<vmid>.qga` (resync-framed, collision-safe) |
-   | `ssh` | Linux, FreeBSD | `cat /proc/meminfo` / `sysctl` with strict host-key pinning |
+   | `ssh` | Linux, FreeBSD | `cat /proc/meminfo` / `sysctl` with strict host-key pinning, per-VM user/port/key |
    | `http` | Talos Linux | [`meminfo-service`](https://github.com/Wu-Wu/meminfo-service) extension endpoint `http://<node>:1027/meminfo` |
    Windows uses PowerShell `Get-CimInstance Win32_OperatingSystem`
    (`wmic` is gone from current Windows 11 builds).
@@ -103,6 +103,8 @@ sources:                # explicit wins over auto-discovery
     method: ssh
     os: freebsd         # linux | freebsd | talos | auto (qga only)
     host: 10.10.10.11
+    user: monitor       # per-VM ssh user (root is often forbidden)
+    port: 2022          # per-VM port; privateKey works too
   - vmid: 303
     method: http        # Talos node without QGA, pinned explicitly
     host: 192.168.2.30

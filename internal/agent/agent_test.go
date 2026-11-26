@@ -345,6 +345,35 @@ sources:
 	}
 }
 
+// Per-source ssh credentials override the global defaults: root login is
+// commonly forbidden, each VM may name its own user/port/key.
+func TestSSHPerSourceUserPortOverride(t *testing.T) {
+	a, _ := testAgent(t, `
+interval: 1s
+overrideDir: "@OVR@"
+ssh:
+  user: root
+  port: 22
+sources:
+  - vmid: 101
+    method: ssh
+    host: 10.0.0.9
+    user: monitor
+    port: 2022
+    privateKey: /keys/vm101
+`)
+	var got sshc.Options
+	a.SSHRun = func(o sshc.Options, _ string) (string, error) {
+		got = o
+		return "MemTotal: 5 kB\nMemAvailable: 2 kB\n", nil
+	}
+	a.cycle(context.Background())
+
+	if got.User != "monitor" || got.Port != 2022 || got.PrivateKey != "/keys/vm101" {
+		t.Errorf("per-source override lost: %+v", got)
+	}
+}
+
 // End-to-end through the production constructor (logger + level wiring).
 func TestNewConstructor(t *testing.T) {
 	dir := t.TempDir()
