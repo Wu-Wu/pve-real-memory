@@ -58,7 +58,7 @@ func Default() Paths {
 func (p Paths) Backup() (msg string, noop bool, err error) {
 	fi, err := os.Stat(p.ConfigDir)
 	if errors.Is(err, fs.ErrNotExist) {
-		return p.noConfigMsg(), true, nil
+		return p.noConfigMsg("back up"), true, nil
 	}
 	if err != nil {
 		return "", false, fmt.Errorf("stat %s: %w", p.ConfigDir, err)
@@ -86,7 +86,7 @@ func (p Paths) Backup() (msg string, noop bool, err error) {
 		return "", false, fmt.Errorf("scan %s: %w", p.ConfigDir, err)
 	}
 	if len(files) == 0 {
-		return p.noConfigMsg(), true, nil
+		return p.noConfigMsg("back up"), true, nil
 	}
 	sort.Strings(files)
 
@@ -205,8 +205,62 @@ func (p Paths) Restore() (msg string, noop bool, err error) {
 	return msg, false, nil
 }
 
-func (p Paths) noConfigMsg() string {
-	return fmt.Sprintf("no proxmox-rmem configuration found at %s — nothing to do", p.ConfigDir)
+func (p Paths) noConfigMsg(action string) string {
+	return fmt.Sprintf("no proxmox-rmem configuration found at %s — nothing to %s", p.ConfigDir, action)
+}
+
+// Purge removes the config directory from the host — the final cleanup
+// after a completed migration (the installer deliberately leaves the
+// directory behind). The backup archive, if any, is NEVER touched: it
+// is the restore point. Without a backup the purge is refused unless
+// force is set (--now), because the directory holds the only copy of
+// the monitoring SSH key.
+func (p Paths) Purge(force bool) (msg string, noop bool, err error) {
+	fi, err := os.Stat(p.ConfigDir)
+	if errors.Is(err, fs.ErrNotExist) {
+		return p.noConfigMsg("purge"), true, nil
+	}
+	if err != nil {
+		return "", false, fmt.Errorf("stat %s: %w", p.ConfigDir, err)
+	}
+	if !fi.IsDir() {
+		return "", false, fmt.Errorf("%s is not a directory, refusing to remove", p.ConfigDir)
+	}
+
+	count := 0
+	err = filepath.WalkDir(p.ConfigDir, func(_ string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() {
+			count++
+		}
+		return nil
+	})
+	if err != nil {
+		return "", false, fmt.Errorf("scan %s: %w", p.ConfigDir, err)
+	}
+	if count == 0 {
+		return p.noConfigMsg("purge"), true, nil // empty skeleton dir
+	}
+
+	hasBackup := fileExists(p.BackupFile)
+	if !hasBackup && !force {
+		return "", false, fmt.Errorf("refusing to purge %s (%d files, incl. possibly the only monitoring ssh key) without a backup: run --backup first, or --purge --now to remove anyway", p.ConfigDir, count)
+	}
+
+	if err := os.RemoveAll(p.ConfigDir); err != nil {
+		return "", false, fmt.Errorf("remove %s: %w", p.ConfigDir, err)
+	}
+
+	msg = fmt.Sprintf("purge: removed %d files from %s", count, p.ConfigDir)
+	switch {
+	case hasBackup:
+		msg += fmt.Sprintf("\n        backup kept at %s (restore with --restore)", p.BackupFile)
+	default:
+		msg += "\n        WARNING: removed without any backup (--now)"
+	}
+	return msg, false, nil
 }
 
 // atomicWrite writes via a sibling temp file + rename so an interrupted

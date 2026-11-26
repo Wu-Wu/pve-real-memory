@@ -173,3 +173,74 @@ func TestAtomicWriteLeavesNothingPartial(t *testing.T) {
 		t.Errorf("content = %q", got)
 	}
 }
+
+func TestPurgeNoopCases(t *testing.T) {
+	p := testPaths(t)
+	msg, noop, err := p.Purge(false)
+	if err != nil || !noop || !strings.Contains(msg, "nothing to purge") {
+		t.Errorf("missing dir must be a no-op, got noop=%v err=%v msg=%q", noop, err, msg)
+	}
+
+	mustWrite(t, filepath.Join(p.ConfigDir, "config.json"), "x", 0o600)
+	if err := os.Remove(filepath.Join(p.ConfigDir, "config.json")); err != nil {
+		t.Fatal(err)
+	}
+	if _, noop, err := p.Purge(false); err != nil || !noop {
+		t.Errorf("empty dir must be a no-op, got noop=%v err=%v", noop, err)
+	}
+}
+
+// The key scenario: no backup -> refuse, keep everything, explain how.
+func TestPurgeRefusesWithoutBackup(t *testing.T) {
+	p := testPaths(t)
+	mustWrite(t, filepath.Join(p.ConfigDir, "config.json"), `{"auto": true}`, 0o600)
+	mustWrite(t, filepath.Join(p.ConfigDir, "id_rsa_monitor"), "PRIV", 0o600)
+
+	_, _, err := p.Purge(false)
+	if err == nil ||
+		!strings.Contains(err.Error(), "without a backup") ||
+		!strings.Contains(err.Error(), "--backup") ||
+		!strings.Contains(err.Error(), "--purge --now") {
+		t.Fatalf("refusal must explain both escape hatches, got %v", err)
+	}
+	if _, serr := os.Stat(filepath.Join(p.ConfigDir, "id_rsa_monitor")); serr != nil {
+		t.Error("refused purge must not delete anything")
+	}
+}
+
+func TestPurgeWithBackupAndForceModes(t *testing.T) {
+	// with a backup: plain purge succeeds, archive survives
+	p := testPaths(t)
+	mustWrite(t, filepath.Join(p.ConfigDir, "config.json"), "cfg", 0o600)
+	mustWrite(t, filepath.Join(p.ConfigDir, "id_rsa_monitor"), "PRIV", 0o600)
+	if _, _, err := p.Backup(); err != nil {
+		t.Fatal(err)
+	}
+	msg, noop, err := p.Purge(false)
+	if err != nil || noop {
+		t.Fatalf("purge with backup must work: noop=%v err=%v", noop, err)
+	}
+	if !strings.Contains(msg, "removed 2 files") || !strings.Contains(msg, "backup kept at") {
+		t.Errorf("unexpected purge message: %s", msg)
+	}
+	if _, err := os.Stat(p.ConfigDir); !os.IsNotExist(err) {
+		t.Error("config dir must be gone")
+	}
+	if _, err := os.Stat(p.BackupFile); err != nil {
+		t.Error("purge must never delete the backup archive")
+	}
+
+	// without a backup: --now (force) removes, warned
+	p2 := testPaths(t)
+	mustWrite(t, filepath.Join(p2.ConfigDir, "config.json"), "cfg", 0o600)
+	msg, noop, err = p2.Purge(true)
+	if err != nil || noop {
+		t.Fatalf("forced purge must work: noop=%v err=%v", noop, err)
+	}
+	if !strings.Contains(msg, "WARNING: removed without any backup") {
+		t.Errorf("forced purge must warn loudly: %s", msg)
+	}
+	if _, err := os.Stat(p2.ConfigDir); !os.IsNotExist(err) {
+		t.Error("forced purge must remove the dir")
+	}
+}

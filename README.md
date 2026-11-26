@@ -177,6 +177,9 @@ proxmox-rmem-helper --restore   # when rolling back: unpacks the saved
                                 # directory (survives a purge of the
                                 # old package; restart proxmox-rmem
                                 # afterwards)
+proxmox-rmem-helper --purge     # final cleanup once the migration is
+                                # confirmed good: removes
+                                # /etc/proxmox-rmem from the host
 ```
 
 `--backup` tars the **whole** `/etc/proxmox-rmem` directory —
@@ -189,11 +192,14 @@ snapshot: copying `QemuServer.pm` over a possibly-newer installed file
 is the old `.bak` downgrade defect — each project's installer applies
 its own patch on the live module.
 If the source is missing (no config dir / no archive) each prints
-"nothing to do" and exits 0 — that is a success, not an error. All
-messages go to stdout; a successful run reports paths, file/byte
-counts and a sha256 prefix, and notes whether it replaced an existing
-backup/config. Writes are atomic (temp+rename); archive entries with
-unsafe paths are refused.
+"nothing to do" and exits 0 — that is a success, not an error.
+`--purge` refuses to delete without an existing backup (the dir may
+hold the only copy of the monitoring SSH key) — run `--backup` first,
+or `--purge --now` to override; the backup archive itself is never
+deleted. All messages go to stdout; a successful run reports paths,
+file/byte counts and a sha256 prefix, and notes whether it replaced an
+existing backup/config. Writes are atomic (temp+rename); archive
+entries with unsafe paths are refused.
 
 ## Development
 

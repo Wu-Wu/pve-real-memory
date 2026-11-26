@@ -22,10 +22,15 @@ usage:
   proxmox-rmem-helper --restore   unpack the archive back into
                                 /etc/proxmox-rmem (dir is created if
                                 the old package was purged)
+  proxmox-rmem-helper --purge     remove /etc/proxmox-rmem from the
+                                host; requires an existing backup,
+                                add --now to remove without one
+                                (the backup archive is never deleted)
   proxmox-rmem-helper --version   print version
 
 Run --backup before installing pve-real-memory if you may want to roll
-back later; --restore is useful after a purge of the old package.
+back later; --restore is useful after a purge of the old package;
+--purge is the final cleanup once the migration is confirmed good.
 The PVE patch itself is not part of the backup — the respective
 installer applies it on top of the live (possibly newer) PVE files.
 `
@@ -34,6 +39,8 @@ func main() {
 	flag.Usage = func() { fmt.Print(usage) }
 	backup := flag.Bool("backup", false, "save the current proxmox-rmem config")
 	restore := flag.Bool("restore", false, "restore the proxmox-rmem config from backup")
+	purge := flag.Bool("purge", false, "remove /etc/proxmox-rmem from the host")
+	now := flag.Bool("now", false, "with --purge: remove even when no backup exists")
 	ver := flag.Bool("version", false, "print version")
 	flag.Parse()
 
@@ -43,12 +50,12 @@ func main() {
 	}
 
 	n := 0
-	for _, b := range []bool{*backup, *restore} {
+	for _, b := range []bool{*backup, *restore, *purge} {
 		if b {
 			n++
 		}
 	}
-	if n != 1 {
+	if n != 1 || (*now && !*purge) {
 		fmt.Print(usage)
 		os.Exit(2)
 	}
@@ -64,10 +71,13 @@ func main() {
 		noop bool
 		err  error
 	)
-	if *backup {
+	switch {
+	case *backup:
 		msg, noop, err = p.Backup()
-	} else {
+	case *restore:
 		msg, noop, err = p.Restore()
+	default:
+		msg, noop, err = p.Purge(*now)
 	}
 	if err != nil {
 		fmt.Printf("proxmox-rmem-helper: %v\n", err)
