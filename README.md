@@ -56,10 +56,10 @@ install -m 0755 pve-real-memory /usr/local/bin/
   line for SSH-monitored guests;
 - applies the Perl patch, installs the systemd unit and an apt
   Post-Invoke hook, restarts `pvestatd`/`pvedaemon`;
-- detects and migrates a legacy `proxmox-rmem` install away
-  automatically (its files are archived under
-  `/var/lib/pve-real-memory/legacy-backup/`, nothing is restored over
-  newer PVE files).
+- detects and tears down a legacy `proxmox-rmem` install automatically
+  (its files are archived under `/var/lib/pve-real-memory/legacy-backup/`,
+  nothing is restored over newer PVE files; the legacy **config stays in
+  place** — saving it is `proxmox-rmem-helper`'s job, see below).
 
 Check it:
 
@@ -159,6 +159,30 @@ a second line of defense (locked, `perl -c`-verified, auto-reverts on a
 failed check). The hook never returns non-zero — apt can't break because
 of it.
 
+### proxmox-rmem-helper
+
+A second, tiny binary shipped from this repo saves and restores the
+legacy `proxmox-rmem` configuration around a migration. The installer
+deliberately leaves `/etc/proxmox-rmem/` in place, so you own the
+safety copy:
+
+```sh
+proxmox-rmem-helper --backup    # BEFORE installing pve-real-memory,
+                                # if you may want to roll back later
+proxmox-rmem-helper --restore   # when rolling back: puts the saved
+                                # config back (survives a purge of the
+                                # old package; restart proxmox-rmem after)
+```
+
+`--backup` copies `/etc/proxmox-rmem/config.json` to
+`/var/backups/proxmox-rmem/config.json`; `--restore` copies it back.
+If the source is missing (no config / no backup) each prints
+"nothing to do" and exits 0 — that is a success, not an error. All
+messages go to stdout; a successful run reports paths, byte size and a
+sha256 prefix, and notes whether it replaced an existing
+backup/config. Writes are atomic (temp+rename, source permissions
+kept).
+
 ## Development
 
 Everything runs in local docker, no host Go toolchain needed:
@@ -166,7 +190,8 @@ Everything runs in local docker, no host Go toolchain needed:
 ```sh
 make test    # go test ./... inside golang:1.26 (perl -c tests included)
 make vet
-make build   # static linux/amd64 binary -> ./bin/pve-real-memory
+make build   # static linux/amd64 binaries -> ./bin/pve-real-memory
+             #                              -> ./bin/proxmox-rmem-helper
 ```
 
 Tested against the `vmstatus()` source of Proxmox qemu-server 9.2 and

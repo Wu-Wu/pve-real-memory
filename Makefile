@@ -2,6 +2,8 @@
 # the host. The release artifact is a static linux/amd64 binary.
 
 BINARY  := pve-real-memory
+HELPER  := proxmox-rmem-helper
+BUILDS  := $(BINARY) $(HELPER)
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -s -w -X main.version=$(VERSION)
 
@@ -28,14 +30,18 @@ image:
 ## build: static linux/amd64 release binary into ./bin
 build:
 	@mkdir -p bin
-	$(RUN) env GOOS=linux GOARCH=amd64 go build -trimpath -ldflags '$(LDFLAGS)' \
-		-o /src/bin/$(BINARY) ./cmd/$(BINARY)
-	@file bin/$(BINARY)
+	@for b in $(BUILDS); do \
+		$(RUN) env GOOS=linux GOARCH=amd64 go build -trimpath -ldflags '$(LDFLAGS)' \
+			-o /src/bin/$$b ./cmd/$$b || exit 1; \
+	done
+	@file bin/$(BINARY) bin/$(HELPER)
 
 ## build-local: native binary (for running inside an arm64 test VM)
 build-local:
 	@mkdir -p bin
-	$(RUN) go build -trimpath -o /src/bin/$(BINARY)-local ./cmd/$(BINARY)
+	@for b in $(BUILDS); do \
+		$(RUN) go build -trimpath -o /src/bin/$$b-local ./cmd/$$b || exit 1; \
+	done
 
 test:
 	$(RUN) go test ./...

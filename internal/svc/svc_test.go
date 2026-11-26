@@ -202,11 +202,18 @@ func TestInstallMigratesLegacy(t *testing.T) {
 	if !strings.Contains(string(raw), patch.BeginMarker) {
 		t.Error("new patch must be applied")
 	}
-	for _, f := range []string{l.Legacy.UnitFile, l.Legacy.Script, l.Legacy.ConfigDir,
+	for _, f := range []string{l.Legacy.UnitFile, l.Legacy.Script,
 		l.Legacy.PMBackup, l.Legacy.AutopatchLog,
 		filepath.Join(filepath.Dir(l.Legacy.OverrideGlob), "pve-vm-55-mem-override")} {
 		if _, err := os.Stat(f); !os.IsNotExist(err) {
 			t.Errorf("legacy file still present: %s", f)
+		}
+	}
+	// the config dir survives: backups are proxmox-rmem-helper's job
+	if cfg := filepath.Join(l.Legacy.ConfigDir, "config.json"); true {
+		b, err := os.ReadFile(cfg)
+		if err != nil || string(b) != "legacy stuff\n" {
+			t.Errorf("legacy config must stay untouched at %s (err=%v)", cfg, err)
 		}
 	}
 	// .bak must NOT have been restored over the live file
@@ -221,7 +228,7 @@ func TestInstallMigratesLegacy(t *testing.T) {
 		}
 		return nil
 	})
-	if moved < 7 {
+	if moved < 6 {
 		t.Errorf("only %d files archived", moved)
 	}
 	joined := strings.Join(*cmds, "\n")

@@ -1,8 +1,9 @@
 // Package svc implements the lifecycle verbs: --install, --uninstall and
 // the apt post-invoke repair. Every mutating step is idempotent, guarded
 // by an advisory lock, and validated (perl -c) before Proxmox services
-// are restarted. A legacy proxmox-rmem install is detected and migrated
-// away automatically during install.
+// are restarted. A legacy proxmox-rmem install is detected and torn
+// down automatically during install; its config files stay untouched —
+// saving them is the job of proxmox-rmem-helper.
 package svc
 
 import (
@@ -421,7 +422,10 @@ func EnsureKey(path string) (pub string, created bool, err error) {
 
 // migrateLegacy tears down a proxmox-rmem install: daemon, apt hook,
 // scripts, its patch block and its stray files — everything moved to a
-// timestamped backup dir, nothing silently destroyed.
+// timestamped backup dir, nothing silently destroyed. The config dir is
+// deliberately LEFT IN PLACE: a user who rolls back to proxmox-rmem
+// (after restoring via proxmox-rmem-helper) must find it intact, and
+// the helper — not the installer — owns config backups.
 func (o *Ops) migrateLegacy() {
 	detected := false
 	for _, p := range []string{o.Layout.Legacy.UnitFile, o.Layout.Legacy.Script, o.Layout.Legacy.ConfigDir, o.Layout.Legacy.AptHelper, o.Layout.Legacy.PatchScript} {
@@ -480,7 +484,6 @@ func (o *Ops) migrateLegacy() {
 	move(o.Layout.Legacy.AptHelper)
 	move(o.Layout.Legacy.Script)
 	move(o.Layout.Legacy.PatchScript)
-	move(o.Layout.Legacy.ConfigDir)
 	move(o.Layout.Legacy.PMBackup)
 	move(o.Layout.Legacy.AutopatchLog)
 	move(o.Layout.Legacy.OverrideGlob)
