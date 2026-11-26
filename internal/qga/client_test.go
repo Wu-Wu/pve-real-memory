@@ -190,6 +190,9 @@ func TestDetectOS(t *testing.T) {
 		want string
 	}{
 		// real-world payloads (2026-11):
+		{OSInfo{ID: "mswindows", Name: "Microsoft Windows", KernelRelease: "19045",
+			KernelVersion: "10.0", Version: "Microsoft Windows 10",
+			Variant: "client", VariantID: "client"}, "windows"}, // Win10 22H2 agent
 		{OSInfo{ID: "freebsd", Name: "FreeBSD", KernelRelease: "15.1-RELEASE-p6",
 			Variant: "OPNsense 26.7.8_2 (amd64)", VariantID: "opnsense"}, "freebsd"},
 		{OSInfo{ID: "debian", Name: "Debian GNU/Linux", KernelRelease: "6.12.115+deb13.1-cloud-amd64"}, "linux"},

@@ -381,6 +381,8 @@ type OSInfo struct {
 	Name          string `json:"name"`
 	ID            string `json:"id"`
 	KernelRelease string `json:"kernel-release"`
+	KernelVersion string `json:"kernel-version"`
+	Version       string `json:"version"`
 	Variant       string `json:"variant"`
 	VariantID     string `json:"variant-id"`
 }
