@@ -114,15 +114,19 @@ jobs:
           commit=$(git rev-list -n1 "$tag")
           # previous tag, empty for the initial release
           prev=$(git describe --tags --abbrev=0 "$commit^" 2>/dev/null || true)
+          date=$(git log -1 --format=%cs "$commit")   # tagged commit date, ISO
           # notes are built with printf + git log --pretty only: no heredoc,
           # so nothing in a commit subject can expand or inject; single
           # quotes keep the deploy one-liner literal
           {
-            printf 'Real guest memory reporting for Proxmox VE 9.2+ — `%s`.\n\n' "$tag"
-            printf 'Binaries (static, no dependencies):\n'
+            printf '## pve-real-memory %s (%s)\n\n' "$tag" "$date"
+            printf 'Real guest memory reporting for Proxmox VE 9.2+\n\n'
+            printf '### Binaries\n\nstatic, no dependencies\n\n'
             printf -- '- `pve-real-memory-linux-amd64` / `pve-real-memory-linux-arm64`\n'
             printf -- '- `proxmox-rmem-helper-linux-amd64` / `proxmox-rmem-helper-linux-arm64`\n\n'
-            printf 'Deploy: `bash -c "$(curl -fsSL https://raw.githubusercontent.com/Wu-Wu/pve-real-memory/main/install.sh)"`\n\n'
+            printf '### Deploy\n\n```\n'
+            printf 'bash -c "$(curl -fsSL https://raw.githubusercontent.com/Wu-Wu/pve-real-memory/main/install.sh)"\n'
+            printf '```\n\n'
             if [ -n "$prev" ]; then
               printf '## Changes since `%s`\n\n' "$prev"
               git log --no-merges --pretty=format:'- %s (%h)' "$prev..$tag"
