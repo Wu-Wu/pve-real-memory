@@ -40,9 +40,16 @@ One static Go binary per Proxmox node plus one YAML config:
 
 ## Deploy
 
-Upload the static binary (no dependencies) for your architecture and go.
-Proxmox 9.2+ supports both amd64 and arm64; pick by `uname -m` —
-`x86_64` → amd64, `aarch64` → arm64:
+One line (root, on the Proxmox host):
+
+```sh
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/Wu-Wu/pve-real-memory/main/install.sh)"
+```
+
+It detects the architecture, installs the latest release binary and
+runs `--install`. The manual equivalent — Proxmox 9.2+ supports both
+amd64 and arm64, pick by `uname -m` (`x86_64` → amd64, `aarch64` →
+arm64):
 
 ```sh
 uname -m                                  # x86_64 or aarch64
