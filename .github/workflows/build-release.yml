@@ -121,6 +121,7 @@ jobs:
           {
             printf '## pve-real-memory %s (%s)\n\n' "$tag" "$date"
             printf 'Real guest memory reporting for Proxmox VE 9.2+\n\n'
+            printf 'Please try out the release binaries and report any issues at\nhttps://github.com/Wu-Wu/pve-real-memory/issues.\n\n'
             printf '### Binaries\n\nstatic, no dependencies\n\n'
             printf -- '- `pve-real-memory-linux-amd64` / `pve-real-memory-linux-arm64`\n'
             printf -- '- `proxmox-rmem-helper-linux-amd64` / `proxmox-rmem-helper-linux-arm64`\n\n'
