@@ -1,0 +1,130 @@
+name: Build and release
+
+# PRs against main and manual dispatch run the full test suite and build
+# every binary for both architectures (native runners, artifacts only,
+# nothing published). Pushing a tag vX.Y.Z additionally cuts a GitHub
+# release: the release job gathers the four artifacts, writes the notes
+# and uploads the assets with the built-in GITHUB_TOKEN (no secrets).
+# The release assets are what install.sh serves via releases/latest.
+#
+# Proxmox 9.2+ supports both amd64 and arm64, so every event builds both
+# arches natively (arm64 on ubuntu-24.04-arm); a failure of one arch
+# never cancels the other.
+
+on:
+  push:
+    tags:
+      - v*
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  ci:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      # perl ships with the runner; internal/patch tests gate the
+      # vmstatus patcher with `perl -c`
+      - name: gofmt
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+
+      - name: vet
+        run: go vet ./...
+
+      - name: test
+        run: go test -count=1 ./...
+
+  build:
+    strategy:
+      fail-fast: false   # a failure in one arch must not cancel the other
+      matrix:
+        arch: [amd64, arm64]
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    name: build (${{ matrix.arch }})
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0   # git describe needs tags for the version stamp
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build both binaries (${{ matrix.arch }})
+        run: |
+          set -euo pipefail
+          VERSION="$(git describe --tags --always --dirty)"
+          echo "version stamp: $VERSION"
+          for cmd in pve-real-memory proxmox-rmem-helper; do
+            CGO_ENABLED=0 GOOS=linux GOARCH=${{ matrix.arch }} \
+              go build -trimpath \
+                -ldflags "-s -w -X main.version=$VERSION" \
+                -o "bin/$cmd-linux-${{ matrix.arch }}" "./cmd/$cmd"
+          done
+          file bin/*
+        shell: bash
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: binaries-${{ matrix.arch }}
+          path: bin/*
+          if-no-files-found: error
+
+  release:
+    needs: [ci, build]
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: binaries-amd64
+          path: dist
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: binaries-arm64
+          path: dist
+
+      - name: Publish GitHub release with the four binaries
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          ls -l dist
+          # heredoc without quotes so $-vars expand; the markdown backticks
+          # are escaped, otherwise bash runs them as command substitution
+          cat > notes.md <<EOF
+          Real guest memory reporting for Proxmox VE 9.2+ — \`${GITHUB_REF_NAME}\`.
+
+          Binaries (static, no dependencies):
+          - \`pve-real-memory-linux-amd64\` / \`pve-real-memory-linux-arm64\`
+          - \`proxmox-rmem-helper-linux-amd64\` / \`proxmox-rmem-helper-linux-arm64\`
+
+          Deploy: \`bash -c "\$(curl -fsSL https://raw.githubusercontent.com/Wu-Wu/pve-real-memory/main/install.sh)"\`
+          EOF
+          # no checkout in this job: gh needs an explicit -R without git context
+          if gh release view "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release edit "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" --notes-file notes.md
+          else
+            gh release create "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" \
+              --title "$GITHUB_REF_NAME" --notes-file notes.md
+          fi
+          gh release upload "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" \
+            dist/pve-real-memory-linux-* dist/proxmox-rmem-helper-linux-* --clobber
+          gh release view "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY"
+        shell: bash
