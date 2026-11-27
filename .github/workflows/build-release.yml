@@ -90,6 +90,10 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0   # changelog needs the history since the previous tag
+
       - uses: actions/download-artifact@v4
         with:
           name: binaries-amd64
@@ -106,25 +110,37 @@ jobs:
         run: |
           set -euo pipefail
           ls -l dist
-          # heredoc without quotes so $-vars expand; the markdown backticks
-          # are escaped, otherwise bash runs them as command substitution
-          cat > notes.md <<EOF
-          Real guest memory reporting for Proxmox VE 9.2+ — \`${GITHUB_REF_NAME}\`.
-
-          Binaries (static, no dependencies):
-          - \`pve-real-memory-linux-amd64\` / \`pve-real-memory-linux-arm64\`
-          - \`proxmox-rmem-helper-linux-amd64\` / \`proxmox-rmem-helper-linux-arm64\`
-
-          Deploy: \`bash -c "\$(curl -fsSL https://raw.githubusercontent.com/Wu-Wu/pve-real-memory/main/install.sh)"\`
-          EOF
-          # no checkout in this job: gh needs an explicit -R without git context
-          if gh release view "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release edit "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" --notes-file notes.md
+          tag="$GITHUB_REF_NAME"
+          commit=$(git rev-list -n1 "$tag")
+          # previous tag, empty for the initial release
+          prev=$(git describe --tags --abbrev=0 "$commit^" 2>/dev/null || true)
+          # notes are built with printf + git log --pretty only: no heredoc,
+          # so nothing in a commit subject can expand or inject; single
+          # quotes keep the deploy one-liner literal
+          {
+            printf 'Real guest memory reporting for Proxmox VE 9.2+ — `%s`.\n\n' "$tag"
+            printf 'Binaries (static, no dependencies):\n'
+            printf -- '- `pve-real-memory-linux-amd64` / `pve-real-memory-linux-arm64`\n'
+            printf -- '- `proxmox-rmem-helper-linux-amd64` / `proxmox-rmem-helper-linux-arm64`\n\n'
+            printf 'Deploy: `bash -c "$(curl -fsSL https://raw.githubusercontent.com/Wu-Wu/pve-real-memory/main/install.sh)"`\n\n'
+            if [ -n "$prev" ]; then
+              printf '## Changes since `%s`\n\n' "$prev"
+              git log --no-merges --pretty=format:'- %s (%h)' "$prev..$tag"
+            else
+              printf '## Initial release\n\n'
+              git log --no-merges --pretty=format:'- %s (%h)' "$tag"
+            fi
+            printf '\n'
+          } > notes.md
+          cat notes.md
+          # no git context needed further: gh gets an explicit -R
+          if gh release view "$tag" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release edit "$tag" -R "$GITHUB_REPOSITORY" --notes-file notes.md
           else
-            gh release create "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" \
-              --title "$GITHUB_REF_NAME" --notes-file notes.md
+            gh release create "$tag" -R "$GITHUB_REPOSITORY" \
+              --title "$tag" --notes-file notes.md
           fi
-          gh release upload "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" \
+          gh release upload "$tag" -R "$GITHUB_REPOSITORY" \
             dist/pve-real-memory-linux-* dist/proxmox-rmem-helper-linux-* --clobber
-          gh release view "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY"
+          gh release view "$tag" -R "$GITHUB_REPOSITORY"
         shell: bash
